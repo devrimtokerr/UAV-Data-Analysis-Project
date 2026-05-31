@@ -3,7 +3,7 @@ Welcome to my UAV Project.
 You have 2 ways to analyze this project:
 1st Way:
 # Mission Planner Simulation ( Optional ):
-1) You have to have Python and Mission Planner downloaded in your PC.
+1) You have to have Python and Mission Planner installed in your PC.
 2) Download the CSV File called uav_navigation_dataset.csv 
 3) Copy-paste the code called kalman_filtering_uav.py into your Visual Studio Code ( or whatever you are using )
 4) Run the code and you will have given two files such as RAW_DATA.waypoints and KALMAN_FILTERED_DATA.waypoints on your PC. It means that you are ready to transfer those files into your Mission Planner.
