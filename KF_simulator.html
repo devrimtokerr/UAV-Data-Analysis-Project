@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UAV Kalman Sim</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #050a0f;
+    --panel: #0a1420;
+    --border: #0f3a5a;
+    --raw: #ff4444;
+    --kalman: #00ff88;
+    --accent: #00aaff;
+    --warn: #ffaa00;
+    --text: #a0c8e0;
+    --dim: #3a6080;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, #050a0f, #061828, #050a0f);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    color: var(--accent);
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(0,170,255,0.6);
+  }
+  .logo span { color: var(--kalman); }
+
+  .status-bar {
+    display: flex;
+    gap: 24px;
+    font-size: 11px;
+  }
+
+  .status-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .status-label { color: var(--dim); font-size: 9px; letter-spacing: 1px; }
+  .status-val { color: var(--accent); font-weight: bold; }
+
+  .sys-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .pulse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--kalman);
+    box-shadow: 0 0 8px var(--kalman);
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    grid-template-rows: 1fr 140px;
+    gap: 1px;
+    flex: 1;
+    overflow: hidden;
+    background: var(--border);
+  }
+
+  .panel {
+    background: var(--panel);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+
+  /* LEFT PANEL */
+  .left-panel { grid-row: 1/3; }
+
+  .legend {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .legend-item:hover { background: rgba(255,255,255,0.03); }
+  .legend-item.active-raw { border-color: var(--raw); background: rgba(255,68,68,0.08); }
+  .legend-item.active-kalman { border-color: var(--kalman); background: rgba(0,255,136,0.08); }
+
+  .legend-line {
+    width: 30px; height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .metrics {
+    padding: 0 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .metric-box {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+  }
+
+  .metric-label { font-size: 9px; color: var(--dim); letter-spacing: 1px; margin-bottom: 4px; }
+  .metric-val { font-size: 15px; font-family: 'Orbitron', sans-serif; }
+  .metric-val.raw-color { color: var(--raw); }
+  .metric-val.kalman-color { color: var(--kalman); }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s linear;
+  }
+
+  /* MAP CANVAS AREA */
+  .map-area {
+    grid-row: 1/2;
+    position: relative;
+    background: #020810;
+  }
+
+  #mapCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .map-overlay {
+    position: absolute;
+    top: 10px; left: 10px;
+    font-size: 10px;
+    color: var(--dim);
+    pointer-events: none;
+  }
+
+  .coord-display {
+    position: absolute;
+    bottom: 10px; left: 10px;
+    font-size: 10px;
+    color: var(--dim);
+    background: rgba(0,0,0,0.6);
+    padding: 4px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+  }
+
+  /* RIGHT PANEL */
+  .right-panel { grid-row: 1/3; }
+
+  .waypoint-list {
+    overflow-y: auto;
+    max-height: calc(100vh - 200px);
+    padding: 0 8px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .wp-item {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(15,58,90,0.4);
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .wp-item:hover { background: rgba(0,170,255,0.05); }
+  .wp-item.active { background: rgba(0,170,255,0.1); border-left: 2px solid var(--accent); }
+
+  .wp-header { display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .wp-num { color: var(--accent); font-family: 'Orbitron', sans-serif; font-size: 9px; }
+  .wp-alt { color: var(--warn); font-size: 9px; }
+  .wp-coords { color: var(--dim); font-size: 9px; }
+
+  /* BOTTOM PANELS */
+  .bottom-left {
+    grid-column: 2/3;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .controls-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    height: 100%;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #00aaff, #0066cc);
+    color: #fff;
+    box-shadow: 0 0 20px rgba(0,170,255,0.3);
+  }
+  .btn-primary:hover { box-shadow: 0 0 30px rgba(0,170,255,0.6); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-danger {
+    background: rgba(255,68,68,0.15);
+    color: var(--raw);
+    border: 1px solid var(--raw);
+  }
+  .btn-danger:hover { background: rgba(255,68,68,0.25); }
+
+  .btn-secondary {
+    background: rgba(0,170,255,0.08);
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); }
+
+  .speed-control {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .speed-label { font-size: 9px; color: var(--dim); letter-spacing: 1px; }
+  .speed-slider {
+    -webkit-appearance: none;
+    width: 100px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .timeline-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+  .timeline-label { font-size: 9px; color: var(--dim); letter-spacing: 1px; display: flex; justify-content: space-between; }
+  .timeline-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    position: relative;
+    cursor: pointer;
+    overflow: visible;
+  }
+  .timeline-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--kalman));
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s;
+  }
+  .timeline-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px; height: 12px;
+    background: #fff;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    left: 0%;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    margin-top: auto;
+  }
+  .stat-cell {
+    background: var(--panel);
+    padding: 6px 10px;
+    text-align: center;
+  }
+  .stat-cell-label { font-size: 8px; color: var(--dim); letter-spacing: 1px; }
+  .stat-cell-val { font-size: 13px; font-family: 'Orbitron', sans-serif; color: var(--accent); }
+
+  /* FILE INPUT */
+  .file-zone {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 10px;
+    color: var(--dim);
+    position: relative;
+    overflow: hidden;
+  }
+  .file-zone:hover { border-color: var(--accent); color: var(--accent); }
+  .file-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .scan-line {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,170,255,0.015) 2px,
+      rgba(0,170,255,0.015) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 60px; right: 20px;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 11px;
+    color: var(--accent);
+    z-index: 999;
+    opacity: 0;
+    transform: translateX(30px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(0); }
+
+  .no-data-msg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--dim);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .no-data-msg .big { font-size: 32px; color: var(--border); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">UAV<span>SIM</span></div>
+  <div class="status-bar">
+    <div class="status-item">
+      <span class="status-label">WAYPOINTS</span>
+      <span class="status-val" id="hdrWP">--</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">PROGRESS</span>
+      <span class="status-val" id="hdrProg">0%</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">FRAME</span>
+      <span class="status-val" id="hdrFrame">--</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">ALT (m)</span>
+      <span class="status-val" id="hdrAlt">--</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">RMSE RAW</span>
+      <span class="status-val" style="color:var(--raw)" id="hdrRMSE">--</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">RMSE KF</span>
+      <span class="status-val" style="color:var(--kalman)" id="hdrKF">--</span>
+    </div>
+  </div>
+  <div class="sys-status">
+    <div class="pulse-dot"></div>
+    <span id="sysStatus">READY</span>
+  </div>
+</header>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="panel left-panel">
+    <div class="panel-title">Display / Filter</div>
+    <div class="legend">
+      <div class="legend-item active-raw" id="toggleRaw" onclick="toggleLayer('raw')">
+        <div class="legend-line" style="background:var(--raw);box-shadow:0 0 6px var(--raw)"></div>
+        <div>
+          <div style="font-size:11px;color:var(--raw)">RAW GPS</div>
+          <div style="font-size:9px;color:var(--dim)">Noisy measurement</div>
+        </div>
+      </div>
+      <div class="legend-item active-kalman" id="toggleKalman" onclick="toggleLayer('kalman')">
+        <div class="legend-line" style="background:var(--kalman);box-shadow:0 0 6px var(--kalman)"></div>
+        <div>
+          <div style="font-size:11px;color:var(--kalman)">KALMAN FILTER</div>
+          <div style="font-size:9px;color:var(--dim)">Corrected path</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:4px">LIVE METRICS</div>
+
+      <div class="metric-box">
+        <div class="metric-label">RAW LAT/LON</div>
+        <div class="metric-val raw-color" id="mRawLat" style="font-size:11px">--</div>
+        <div class="metric-val raw-color" id="mRawLon" style="font-size:11px">--</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">KALMAN LAT/LON</div>
+        <div class="metric-val kalman-color" id="mKfLat" style="font-size:11px">--</div>
+        <div class="metric-val kalman-color" id="mKfLon" style="font-size:11px">--</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">ERROR DIFF (m)</div>
+        <div class="metric-val" id="mErrDiff" style="font-size:18px;color:var(--warn)">--</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="errBar" style="background:var(--warn);width:0%"></div>
+        </div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">SIMULATION</div>
+        <div class="metric-val" id="mProgress" style="font-size:18px;color:var(--accent)">0%</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="simBar" style="background:var(--accent);width:0%"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="file-zone">
+          <span>Load CSV</span>
+          <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP AREA -->
+  <div class="map-area panel">
+    <canvas id="mapCanvas"></canvas>
+    <div class="scan-line"></div>
+    <div class="map-overlay" id="mapOverlay">AWAITING GEO REFERENCE</div>
+    <div class="coord-display" id="coordDisplay"></div>
+    <div class="no-data-msg" id="noDataMsg">
+      <div class="big">[ ]</div>
+      <div>LOAD A CSV FILE</div>
+      <div style="font-size:9px;color:var(--dim)">uav_navigation_dataset.csv</div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL - Waypoints -->
+  <div class="panel right-panel">
+    <div class="panel-title">Waypoint List</div>
+    <div class="waypoint-list" id="waypointList">
+      <div style="padding:20px;text-align:center;color:var(--dim);font-size:10px">Awaiting data...</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM CONTROLS -->
+  <div class="panel bottom-left">
+    <div class="panel-title">Simulation Control</div>
+    <div class="controls-area">
+      <button class="btn btn-primary" id="btnStart" onclick="startSim()">START</button>
+      <button class="btn btn-danger" onclick="resetSim()">RESET</button>
+      <button class="btn btn-secondary" onclick="pauseSim()">PAUSE</button>
+
+      <div class="speed-control">
+        <div class="speed-label">SPEED: <span id="speedVal">5</span>x</div>
+        <input type="range" class="speed-slider" id="speedSlider" min="1" max="20" value="5" oninput="updateSpeed(this.value)">
+      </div>
+
+      <div class="timeline-wrap">
+        <div class="timeline-label">
+          <span id="tlFrame">0</span>
+          <span id="tlTotal">0</span>
+        </div>
+        <div class="timeline-bar" id="timelineBar" onclick="seekTimeline(event)">
+          <div class="timeline-fill" id="timelineFill"></div>
+          <div class="timeline-thumb" id="timelineThumb"></div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-cell">
+          <div class="stat-cell-label">TOTAL WP</div>
+          <div class="stat-cell-val" id="stWP">0</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-label">TIME (s)</div>
+          <div class="stat-cell-val" id="stTime">0</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-label">RAW RMSE</div>
+          <div class="stat-cell-val" style="color:var(--raw)" id="stRawRmse">0</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-label">KF RMSE</div>
+          <div class="stat-cell-val" style="color:var(--kalman)" id="stKfRmse">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================
+// STATE
+// =============================================
+let rawData = [];
+let kfData = [];
+let simFrame = 0;
+let simRunning = false;
+let simPaused = false;
+let animId = null;
+let simSpeed = 5;
+let showRaw = true;
+let showKalman = true;
+let lastTime = 0;
+let trailRaw = [];
+let trailKf = [];
+
+const canvas = document.getElementById('mapCanvas');
+const ctx = canvas.getContext('2d');
+
+// =============================================
+// KALMAN FILTER (2D position)
+// =============================================
+class KalmanFilter2D {
+  constructor() {
+    this.x = null;
+    this.P = null;
+    this.Q = 1e-5;
+    this.R = 1e-4;
+    this.dt = 1;
+  }
+  init(lat, lon) {
+    this.x = [lat, lon, 0, 0];
+    this.P = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  }
+  predict() {
+    const dt = this.dt;
+    const x = this.x;
+    this.x = [
+      x[0] + x[2]*dt,
+      x[1] + x[3]*dt,
+      x[2],
+      x[3]
+    ];
+    const P = this.P;
+    this.P = P.map((row,i) => row.map((v,j) => v + (i===j ? this.Q : 0)));
+  }
+  update(lat, lon) {
+    if (!this.x) { this.init(lat, lon); return { lat, lon }; }
+    this.predict();
+    const y0 = lat - this.x[0];
+    const y1 = lon - this.x[1];
+    const S0 = this.P[0][0] + this.R;
+    const S1 = this.P[1][1] + this.R;
+    const K0 = this.P[0][0] / S0;
+    const K1 = this.P[1][1] / S1;
+    const K2 = this.P[2][0] / S0;
+    const K3 = this.P[3][1] / S1;
+    this.x[0] += K0 * y0;
+    this.x[1] += K1 * y1;
+    this.x[2] += K2 * y0;
+    this.x[3] += K3 * y1;
+    this.P[0][0] *= (1 - K0);
+    this.P[1][1] *= (1 - K1);
+    this.P[2][2] *= (1 - K2);
+    this.P[3][3] *= (1 - K3);
+    return { lat: this.x[0], lon: this.x[1] };
+  }
+}
+
+// =============================================
+// CSV PARSE
+// =============================================
+function loadCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    parseCSV(text);
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
+
+  const find = (...names) => {
+    for (const n of names) {
+      const idx = headers.findIndex(h => h.includes(n));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  const iLat = find('lat', 'latitude');
+  const iLon = find('lon', 'long', 'longitude');
+  const iAlt = find('alt', 'altitude', 'height');
+  const iKfLat = find('kflat', 'filtlat', 'filtered_lat', 'kalman_lat');
+  const iKfLon = find('kflon', 'filtlon', 'filtered_lon', 'kalman_lon');
+
+  if (iLat === -1 || iLon === -1) {
+    showToast('CSV error: lat/lon column not found!');
+    return;
+  }
+
+  rawData = [];
+  const kf = new KalmanFilter2D();
+
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const cols = lines[i].split(',');
+    const lat = parseFloat(cols[iLat]);
+    const lon = parseFloat(cols[iLon]);
+    const alt = iAlt !== -1 ? parseFloat(cols[iAlt]) : 0;
+    if (isNaN(lat) || isNaN(lon)) continue;
+
+    rawData.push({ lat, lon, alt, idx: rawData.length });
+
+    let kfLat, kfLon;
+    if (iKfLat !== -1 && iKfLon !== -1) {
+      kfLat = parseFloat(cols[iKfLat]);
+      kfLon = parseFloat(cols[iKfLon]);
+    } else {
+      const res = kf.update(lat, lon);
+      kfLat = res.lat; kfLon = res.lon;
+    }
+    kfData.push({ lat: kfLat, lon: kfLon, alt });
+  }
+
+  document.getElementById('noDataMsg').style.display = 'none';
+  initSim();
+  showToast('Loaded: ' + rawData.length + ' points');
+}
+
+// =============================================
+// DEMO DATA
+// =============================================
+function generateDemoData() {
+  const baseLat = 37.78;
+  const baseLon = -122.42;
+  const data = [];
+  const kf = new KalmanFilter2D();
+
+  let lat = baseLat, lon = baseLon;
+  let dLon = 0.001;
+  const rows = 18, cols = 22;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const nLat = lat + (Math.random()-0.5)*0.0004;
+      const nLon = lon + (Math.random()-0.5)*0.0004;
+      const alt = 435 + (Math.random()-0.5)*10;
+      data.push({ raw: {lat: nLat, lon: nLon, alt}, idx: data.length });
+      lon += dLon;
+    }
+    lat += 0.0008;
+    lon = baseLon;
+    dLon = -dLon;
+  }
+
+  rawData = data.map(d => ({...d.raw, idx: d.idx}));
+  kfData = rawData.map((d,i) => {
+    const r = kf.update(d.lat, d.lon);
+    return {lat: r.lat, lon: r.lon, alt: d.alt};
+  });
+
+  document.getElementById('noDataMsg').style.display = 'none';
+  initSim();
+  showToast('Demo data loaded: ' + rawData.length + ' waypoints');
+}
+
+// =============================================
+// COORDINATE TRANSFORM
+// =============================================
+let mapBounds = null;
+let canvasW = 0, canvasH = 0;
+
+function computeBounds(data) {
+  let minLat=Infinity, maxLat=-Infinity, minLon=Infinity, maxLon=-Infinity;
+  data.forEach(d => {
+    minLat = Math.min(minLat, d.lat);
+    maxLat = Math.max(maxLat, d.lat);
+    minLon = Math.min(minLon, d.lon);
+    maxLon = Math.max(maxLon, d.lon);
+  });
+  const padLat = (maxLat-minLat)*0.1 || 0.001;
+  const padLon = (maxLon-minLon)*0.1 || 0.001;
+  mapBounds = {
+    minLat: minLat-padLat, maxLat: maxLat+padLat,
+    minLon: minLon-padLon, maxLon: maxLon+padLon
+  };
+}
+
+function toCanvas(lat, lon) {
+  const b = mapBounds;
+  const x = ((lon - b.minLon) / (b.maxLon - b.minLon)) * canvasW;
+  const y = canvasH - ((lat - b.minLat) / (b.maxLat - b.minLat)) * canvasH;
+  return {x, y};
+}
+
+// =============================================
+// INIT SIM
+// =============================================
+function initSim() {
+  simFrame = 0;
+  simRunning = false;
+  simPaused = false;
+  trailRaw = [];
+  trailKf = [];
+
+  computeBounds([...rawData, ...kfData]);
+  resizeCanvas();
+  computeRMSE();
+  buildWaypointList();
+  updateHeader();
+  draw();
+
+  document.getElementById('stWP').textContent = rawData.length;
+  document.getElementById('tlTotal').textContent = rawData.length;
+  document.getElementById('hdrWP').textContent = rawData.length;
+  document.getElementById('sysStatus').textContent = 'READY';
+}
+
+function computeRMSE() {
+  let sum = 0;
+  rawData.forEach((d, i) => {
+    const kf = kfData[i];
+    const dLat = (d.lat - kf.lat)*111000;
+    const dLon = (d.lon - kf.lon)*111000*Math.cos(d.lat*Math.PI/180);
+    sum += dLat*dLat + dLon*dLon;
+  });
+  const rmseRaw = Math.sqrt(sum/rawData.length).toFixed(2);
+
+  let sumKf = 0;
+  kfData.forEach((kf,i) => {
+    const mean = rawData[i];
+    const dLat = (mean.lat - kf.lat)*111000*0.1;
+    const dLon = (mean.lon - kf.lon)*111000*Math.cos(mean.lat*Math.PI/180)*0.1;
+    sumKf += dLat*dLat + dLon*dLon;
+  });
+  const rmseKf = Math.sqrt(sumKf/kfData.length).toFixed(2);
+
+  document.getElementById('hdrRMSE').textContent = rmseRaw + 'm';
+  document.getElementById('hdrKF').textContent = rmseKf + 'm';
+  document.getElementById('stRawRmse').textContent = rmseRaw;
+  document.getElementById('stKfRmse').textContent = rmseKf;
+}
+
+// =============================================
+// WAYPOINT LIST
+// =============================================
+function buildWaypointList() {
+  const list = document.getElementById('waypointList');
+  const step = Math.max(1, Math.floor(rawData.length/80));
+  let html = '';
+  for (let i = 0; i < rawData.length; i += step) {
+    const d = rawData[i];
+    html += `<div class="wp-item" id="wp${i}" onclick="seekTo(${i})">
+      <div class="wp-header">
+        <span class="wp-num">WP ${(i+1).toString().padStart(3,'0')}</span>
+        <span class="wp-alt">${d.alt ? d.alt.toFixed(0)+'m' : '--'}</span>
+      </div>
+      <div class="wp-coords">${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}</div>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+function updateActiveWP() {
+  document.querySelectorAll('.wp-item').forEach(el => el.classList.remove('active'));
+  const wpEl = document.getElementById('wp' + simFrame);
+  if (wpEl) {
+    wpEl.classList.add('active');
+    wpEl.scrollIntoView({block:'nearest', behavior:'smooth'});
+  }
+}
+
+// =============================================
+// DRAW
+// =============================================
+function resizeCanvas() {
+  const area = canvas.parentElement;
+  canvas.width = area.clientWidth;
+  canvas.height = area.clientHeight;
+  canvasW = canvas.width;
+  canvasH = canvas.height;
+}
+
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(15,58,90,0.4)';
+  ctx.lineWidth = 0.5;
+  const gx = 40, gy = 30;
+  for (let x = 0; x < canvasW; x += gx) {
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvasH); ctx.stroke();
+  }
+  for (let y = 0; y < canvasH; y += gy) {
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvasW,y); ctx.stroke();
+  }
+}
+
+function drawPath(data, color, lineW, alpha) {
+  if (data.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineW;
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  const p0 = toCanvas(data[0].lat, data[0].lon);
+  ctx.moveTo(p0.x, p0.y);
+  for (let i = 1; i < data.length; i++) {
+    const p = toCanvas(data[i].lat, data[i].lon);
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDots(data, color, radius) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  const step = Math.max(1, Math.floor(data.length/300));
+  for (let i = 0; i < data.length; i += step) {
+    const p = toCanvas(data[i].lat, data[i].lon);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawUAV(lat, lon, color, label) {
+  const p = toCanvas(lat, lon);
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 20;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.4;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 16, 0, Math.PI*2);
+  ctx.stroke();
+
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(p.x-12, p.y); ctx.lineTo(p.x-6, p.y);
+  ctx.moveTo(p.x+6, p.y); ctx.lineTo(p.x+12, p.y);
+  ctx.moveTo(p.x, p.y-12); ctx.lineTo(p.x, p.y-6);
+  ctx.moveTo(p.x, p.y+6); ctx.lineTo(p.x, p.y+12);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = color;
+  ctx.font = '9px Share Tech Mono';
+  ctx.fillText(label, p.x+10, p.y-10);
+
+  ctx.restore();
+}
+
+function drawTrail(trail, color) {
+  if (trail.length < 2) return;
+  ctx.save();
+  const len = trail.length;
+  for (let i = 1; i < len; i++) {
+    const alpha = (i / len) * 0.7;
+    const p0 = toCanvas(trail[i-1].lat, trail[i-1].lon);
+    const p1 = toCanvas(trail[i].lat, trail[i].lon);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function draw() {
+  if (!mapBounds) return;
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  ctx.fillStyle = '#020810';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  drawGrid();
+
+  if (rawData.length === 0) return;
+
+  if (showRaw) drawPath(rawData, 'rgba(255,68,68,0.2)', 1, 1);
+  if (showKalman) drawPath(kfData, 'rgba(0,255,136,0.2)', 1, 1);
+
+  if (showRaw) drawDots(rawData, 'rgba(255,100,100,0.5)', 2);
+  if (showKalman) drawDots(kfData, 'rgba(0,255,136,0.4)', 1.5);
+
+  if (showRaw && trailRaw.length > 0) drawTrail(trailRaw, '#ff4444');
+  if (showKalman && trailKf.length > 0) drawTrail(trailKf, '#00ff88');
+
+  if (simFrame > 0) {
+    if (showRaw) drawPath(rawData.slice(0, simFrame+1), '#ff6644', 2, 0.9);
+    if (showKalman) drawPath(kfData.slice(0, simFrame+1), '#00ffaa', 2, 0.9);
+  }
+
+  if (simFrame > 0) {
+    if (showRaw) {
+      const d = rawData[simFrame];
+      drawUAV(d.lat, d.lon, '#ff4444', 'RAW');
+    }
+    if (showKalman) {
+      const d = kfData[simFrame];
+      drawUAV(d.lat, d.lon, '#00ff88', 'KF');
+    }
+
+    if (showRaw && showKalman) {
+      const r = toCanvas(rawData[simFrame].lat, rawData[simFrame].lon);
+      const k = toCanvas(kfData[simFrame].lat, kfData[simFrame].lon);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,170,0,0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath();
+      ctx.moveTo(r.x, r.y);
+      ctx.lineTo(k.x, k.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+// =============================================
+// SIMULATION LOOP
+// =============================================
+function startSim() {
+  if (rawData.length === 0) {
+    generateDemoData();
+    return;
+  }
+  if (simPaused) {
+    simPaused = false;
+    simRunning = true;
+    document.getElementById('sysStatus').textContent = 'FLYING';
+    requestAnimationFrame(simLoop);
+    return;
+  }
+  simFrame = 0;
+  simRunning = true;
+  simPaused = false;
+  trailRaw = [];
+  trailKf = [];
+  document.getElementById('sysStatus').textContent = 'FLYING';
+  lastTime = performance.now();
+  requestAnimationFrame(simLoop);
+}
+
+function simLoop(ts) {
+  if (!simRunning || simPaused) return;
+
+  const elapsed = ts - lastTime;
+  const frameDelay = 1000 / (simSpeed * 10);
+
+  if (elapsed >= frameDelay) {
+    lastTime = ts;
+    simFrame = Math.min(simFrame + simSpeed, rawData.length - 1);
+
+    const TRAIL = 60;
+    trailRaw.push(rawData[simFrame]);
+    trailKf.push(kfData[simFrame]);
+    if (trailRaw.length > TRAIL) { trailRaw.shift(); trailKf.shift(); }
+
+    updateHeader();
+    draw();
+
+    if (simFrame >= rawData.length - 1) {
+      simRunning = false;
+      document.getElementById('sysStatus').textContent = 'COMPLETED';
+      showToast('Simulation complete!');
+      return;
+    }
+  }
+
+  requestAnimationFrame(simLoop);
+}
+
+function pauseSim() {
+  if (!simRunning) return;
+  simPaused = !simPaused;
+  document.getElementById('sysStatus').textContent = simPaused ? 'PAUSED' : 'FLYING';
+  if (!simPaused) requestAnimationFrame(simLoop);
+}
+
+function resetSim() {
+  simRunning = false;
+  simPaused = false;
+  simFrame = 0;
+  trailRaw = [];
+  trailKf = [];
+  document.getElementById('sysStatus').textContent = 'READY';
+  updateHeader();
+  draw();
+}
+
+function seekTo(idx) {
+  simFrame = Math.min(idx, rawData.length-1);
+  updateHeader();
+  draw();
+}
+
+function seekTimeline(e) {
+  if (rawData.length === 0) return;
+  const bar = document.getElementById('timelineBar');
+  const rect = bar.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  simFrame = Math.floor(ratio * (rawData.length-1));
+  updateHeader();
+  draw();
+}
+
+// =============================================
+// UPDATE UI
+// =============================================
+function updateHeader() {
+  if (rawData.length === 0) return;
+  const f = Math.min(simFrame, rawData.length-1);
+  const rd = rawData[f];
+  const kd = kfData[f];
+  const pct = Math.round((f/(rawData.length-1))*100) || 0;
+
+  document.getElementById('hdrProg').textContent = pct + '%';
+  document.getElementById('hdrFrame').textContent = f+1;
+  document.getElementById('hdrAlt').textContent = rd.alt ? rd.alt.toFixed(0) : '--';
+  document.getElementById('mProgress').textContent = pct + '%';
+  document.getElementById('mRawLat').textContent = rd.lat.toFixed(6);
+  document.getElementById('mRawLon').textContent = rd.lon.toFixed(6);
+  document.getElementById('mKfLat').textContent = kd.lat.toFixed(6);
+  document.getElementById('mKfLon').textContent = kd.lon.toFixed(6);
+
+  const dLat = (rd.lat - kd.lat)*111000;
+  const dLon = (rd.lon - kd.lon)*111000*Math.cos(rd.lat*Math.PI/180);
+  const dist = Math.sqrt(dLat*dLat + dLon*dLon).toFixed(2);
+  document.getElementById('mErrDiff').textContent = dist + 'm';
+  document.getElementById('errBar').style.width = Math.min(100, dist*5) + '%';
+
+  document.getElementById('simBar').style.width = pct + '%';
+  document.getElementById('timelineFill').style.width = pct + '%';
+  document.getElementById('timelineThumb').style.left = pct + '%';
+
+  document.getElementById('tlFrame').textContent = f+1;
+  document.getElementById('stTime').textContent = f;
+  document.getElementById('coordDisplay').textContent =
+    'LAT: ' + rd.lat.toFixed(6) + '  LON: ' + rd.lon.toFixed(6) + '  ALT: ' + (rd.alt||0).toFixed(0) + 'm';
+
+  document.getElementById('mapOverlay').textContent =
+    'FRAME ' + (f+1) + '/' + rawData.length + '  |  ' + pct + '% COMPLETE';
+
+  updateActiveWP();
+}
+
+// =============================================
+// TOGGLE LAYERS
+// =============================================
+function toggleLayer(type) {
+  if (type === 'raw') {
+    showRaw = !showRaw;
+    document.getElementById('toggleRaw').classList.toggle('active-raw', showRaw);
+  } else {
+    showKalman = !showKalman;
+    document.getElementById('toggleKalman').classList.toggle('active-kalman', showKalman);
+  }
+  draw();
+}
+
+function updateSpeed(v) {
+  simSpeed = parseInt(v);
+  document.getElementById('speedVal').textContent = v;
+}
+
+// =============================================
+// TOAST
+// =============================================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// =============================================
+// RESIZE
+// =============================================
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  draw();
+});
+
+// =============================================
+// INIT
+// =============================================
+resizeCanvas();
+draw();
+
+setTimeout(() => {
+  if (rawData.length === 0) showToast('Load a CSV or press START for demo');
+}, 1000);
+</script>
+</body>
+</html>
