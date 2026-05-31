@@ -1,0 +1,19 @@
+Welcome to my UAV Project.
+
+You have 2 ways to analyze this project:
+1st Way:
+# Mission Planner Simulation ( Optional ):
+1) You have to have Python and Mission Planner downloaded in your PC.
+2) Download the CSV File called uav_navigation_dataset.csv 
+3) Copy-paste the code called kalman_filtering_uav.py into your Visual Studio Code ( or whatever you are using )
+4) Run the code and you will have given two files such as RAW_DATA.waypoints and KALMAN_FILTERED_DATA.waypoints on your PC. It means that you are ready to transfer those files into your Mission Planner.
+5) Go to data log section in Mission Planner and choose the waypoints files
+6)Start simulating the system ( If you have no idea about Mission Planner you should watch tutorials about it)
+
+2nd Way:
+# I have already made an HTML simulator for you
+1) Open the GitHub file and click into KF_Simulator.html file
+2) You can play with variables and analyze the deviation of UAV device and see what Kalman Filter is actually doing in the UAV Navigation Systems.
+
+
+Thank you for reading :)
