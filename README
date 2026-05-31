@@ -15,5 +15,8 @@ You have 2 ways to analyze this project:
 1) Open the GitHub file and click into KF_Simulator.html file
 2) You can analyze the deviation of UAV device and see what Kalman Filter is actually doing in the UAV Navigation Systems.
 
+In Addition:
+You can check at png files in order to compare Raw Data vs Kalman Filtered Data.
+
 
 Thank you for reading :)
